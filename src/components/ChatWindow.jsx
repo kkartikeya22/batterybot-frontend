@@ -4,6 +4,45 @@ import SheetPopup from "./SheetPopup";
 import axios from "axios";
 import "../index.css";
 
+const Typewriter = ({ text, className }) => {
+  const [displayed, setDisplayed] = useState("");
+  const [index, setIndex] = useState(0);
+
+  useEffect(() => {
+    if (index < text.length) {
+      const timeout = setTimeout(() => {
+        setDisplayed(text.slice(0, index + 1));
+        setIndex(i => i + 1);
+      }, 15); // typing speed
+
+      return () => clearTimeout(timeout);
+    }
+  }, [index, text]);
+
+  const parseMarkdown = (rawText) =>
+    rawText
+      .split(/(\*\*[^*]+\*\*|_[^_]+_)/g)
+      .filter(Boolean)
+      .map((chunk, idx) => {
+        if (/^\*\*[^*]+\*\*$/.test(chunk)) {
+          return (
+            <strong key={idx} className="font-semibold text-[#0e4b7f]">
+              {chunk.slice(2, -2)}
+            </strong>
+          );
+        } else if (/^_[^_]+_$/.test(chunk)) {
+          return (
+            <em key={idx} className="italic">
+              {chunk.slice(1, -1)}
+            </em>
+          );
+        }
+        return chunk;
+      });
+
+  return <p className={className}>{parseMarkdown(displayed)}</p>;
+};
+
 const ChatWindow = () => {
     const { activeChat, messages, setMessages, setActiveChat } = useContext(ChatContext);
     const [showRefetchPopup, setShowRefetchPopup] = useState(false);
@@ -276,21 +315,8 @@ const ChatWindow = () => {
 
                                         {sections.map((sectionText, sectionIdx) => {
                                             const lines = sectionText.split("\n").map(l => l.trimEnd());
-                                            const [visibleLines, setVisibleLines] = React.useState([]);
-                                            const [currentLine, setCurrentLine] = React.useState(0);
-                                            const buffer = [];
+                                            let buffer = [];
                                             const elements = [];
-
-                                            React.useEffect(() => {
-                                                if (currentLine < lines.length) {
-                                                    const timeout = setTimeout(() => {
-                                                        setVisibleLines(prev => [...prev, lines[currentLine]]);
-                                                        setCurrentLine(prev => prev + 1);
-                                                    }, 35); // Speed of typing
-
-                                                    return () => clearTimeout(timeout);
-                                                }
-                                            }, [currentLine, lines]);
 
                                             const parseMarkdown = (text) =>
                                                 text
@@ -337,6 +363,7 @@ const ChatWindow = () => {
 
                                             const getDynamicColorClass = (text) => {
                                                 const t = text.toLowerCase();
+
                                                 if (/summary|overview/.test(t)) return "text-[#0e4b7f]";
                                                 if (/observation|trend/.test(t)) return "text-[#007bff]";
                                                 if (/issue|problem|error/.test(t)) return "text-[#e53935]";
@@ -346,12 +373,14 @@ const ChatWindow = () => {
                                                 if (/analysis|insight/.test(t)) return "text-[#6a1b9a]";
                                                 if (/conclusion|final/.test(t)) return "text-[#d81b60]";
                                                 if (/note|important|alert/.test(t)) return "text-[#f9a825]";
-                                                return "text-[#37474f]";
+
+                                                return "text-[#37474f]"; // fallback gray-blue
                                             };
 
-                                            visibleLines.forEach((line, lineIdx) => {
+
+                                            lines.forEach((line, lineIdx) => {
                                                 const isBullet = /^[-*]\s+/.test(line);
-                                                const isHeader = /^[A-Z].+[:：]$/.test(line);
+                                                const isHeader = /^[A-Z].+[:：]$/.test(line); // General header format
                                                 const isMarkdownHeader = /^(#{2,4})\s+/.test(line);
                                                 const isLikelyTableRow = /\|/.test(line) && line.split("|").filter(Boolean).length >= 2;
                                                 const isOnlyPipes = /^\|+\s*\|*$/.test(line);
@@ -363,7 +392,7 @@ const ChatWindow = () => {
 
                                                 if (buffer.length > 0) {
                                                     elements.push(<div key={`table-${lineIdx}`}>{renderBufferedTable()}</div>);
-                                                    buffer.length = 0;
+                                                    buffer = [];
                                                 }
 
                                                 if (isHeader) {
@@ -397,12 +426,11 @@ const ChatWindow = () => {
                                                     );
                                                 } else if (line.length > 0) {
                                                     elements.push(
-                                                        <p
+                                                        <Typewriter
                                                             key={lineIdx}
+                                                            text={line}
                                                             className="text-[15px] text-gray-700 leading-[1.75rem] text-justify"
-                                                        >
-                                                            {parseMarkdown(line)}
-                                                        </p>
+                                                        />
                                                     );
                                                 }
                                             });
@@ -417,7 +445,6 @@ const ChatWindow = () => {
                                                 </div>
                                             );
                                         })}
-
                                     </div>
                                 </div>
                             );
@@ -466,43 +493,45 @@ const ChatWindow = () => {
 
 
             {/* Refetch Popup */}
-            {showRefetchPopup && (
-                <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/30 backdrop-blur-md">
-                    <div className="bg-white/95 border border-[#c2f5e6] rounded-3xl px-7 py-8 w-[330px] text-center shadow-2xl transition-all duration-300 animate-in fade-in zoom-in-75">
+            {
+                showRefetchPopup && (
+                    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/30 backdrop-blur-md">
+                        <div className="bg-white/95 border border-[#c2f5e6] rounded-3xl px-7 py-8 w-[330px] text-center shadow-2xl transition-all duration-300 animate-in fade-in zoom-in-75">
 
-                        {/* Title */}
-                        <p className="mb-5 text-lg font-bold text-[#00a388] flex items-center justify-center gap-2">
-                            <span className="text-2xl animate-bounce">🔄</span>
-                            <span>Refetch Sheet Data?</span>
-                        </p>
+                            {/* Title */}
+                            <p className="mb-5 text-lg font-bold text-[#00a388] flex items-center justify-center gap-2">
+                                <span className="text-2xl animate-bounce">🔄</span>
+                                <span>Refetch Sheet Data?</span>
+                            </p>
 
-                        {/* Action Buttons */}
-                        <div className="flex gap-4 justify-center mt-2">
-                            <button
-                                onClick={handleRefetchSheet}
-                                disabled={isRefetching}
-                                className={`px-6 py-2.5 rounded-full font-bold shadow-md transition-all duration-200 text-white text-sm tracking-wide
+                            {/* Action Buttons */}
+                            <div className="flex gap-4 justify-center mt-2">
+                                <button
+                                    onClick={handleRefetchSheet}
+                                    disabled={isRefetching}
+                                    className={`px-6 py-2.5 rounded-full font-bold shadow-md transition-all duration-200 text-white text-sm tracking-wide
             ${isRefetching
-                                        ? "bg-gray-400 cursor-not-allowed"
-                                        : "bg-[#00c49f] hover:bg-[#00a77b] active:scale-95"
-                                    }`}
-                            >
-                                {isRefetching ? "Fetching..." : "Yes, Refetch"}
-                            </button>
+                                            ? "bg-gray-400 cursor-not-allowed"
+                                            : "bg-[#00c49f] hover:bg-[#00a77b] active:scale-95"
+                                        }`}
+                                >
+                                    {isRefetching ? "Fetching..." : "Yes, Refetch"}
+                                </button>
 
-                            <button
-                                onClick={() => setShowRefetchPopup(false)}
-                                className="bg-[#ffd6d6] hover:bg-[#ffbaba] text-[#444] px-6 py-2.5 rounded-full font-semibold text-sm shadow-sm transition-all duration-200 active:scale-95"
-                            >
-                                Cancel
-                            </button>
+                                <button
+                                    onClick={() => setShowRefetchPopup(false)}
+                                    className="bg-[#ffd6d6] hover:bg-[#ffbaba] text-[#444] px-6 py-2.5 rounded-full font-semibold text-sm shadow-sm transition-all duration-200 active:scale-95"
+                                >
+                                    Cancel
+                                </button>
+                            </div>
                         </div>
                     </div>
-                </div>
-            )}
+                )
+            }
 
 
-        </div>
+        </div >
     );
 
 
