@@ -276,8 +276,21 @@ const ChatWindow = () => {
 
                                         {sections.map((sectionText, sectionIdx) => {
                                             const lines = sectionText.split("\n").map(l => l.trimEnd());
-                                            let buffer = [];
+                                            const [visibleLines, setVisibleLines] = React.useState([]);
+                                            const [currentLine, setCurrentLine] = React.useState(0);
+                                            const buffer = [];
                                             const elements = [];
+
+                                            React.useEffect(() => {
+                                                if (currentLine < lines.length) {
+                                                    const timeout = setTimeout(() => {
+                                                        setVisibleLines(prev => [...prev, lines[currentLine]]);
+                                                        setCurrentLine(prev => prev + 1);
+                                                    }, 35); // Speed of typing
+
+                                                    return () => clearTimeout(timeout);
+                                                }
+                                            }, [currentLine, lines]);
 
                                             const parseMarkdown = (text) =>
                                                 text
@@ -324,7 +337,6 @@ const ChatWindow = () => {
 
                                             const getDynamicColorClass = (text) => {
                                                 const t = text.toLowerCase();
-
                                                 if (/summary|overview/.test(t)) return "text-[#0e4b7f]";
                                                 if (/observation|trend/.test(t)) return "text-[#007bff]";
                                                 if (/issue|problem|error/.test(t)) return "text-[#e53935]";
@@ -334,14 +346,12 @@ const ChatWindow = () => {
                                                 if (/analysis|insight/.test(t)) return "text-[#6a1b9a]";
                                                 if (/conclusion|final/.test(t)) return "text-[#d81b60]";
                                                 if (/note|important|alert/.test(t)) return "text-[#f9a825]";
-
-                                                return "text-[#37474f]"; // fallback gray-blue
+                                                return "text-[#37474f]";
                                             };
 
-
-                                            lines.forEach((line, lineIdx) => {
+                                            visibleLines.forEach((line, lineIdx) => {
                                                 const isBullet = /^[-*]\s+/.test(line);
-                                                const isHeader = /^[A-Z].+[:：]$/.test(line); // General header format
+                                                const isHeader = /^[A-Z].+[:：]$/.test(line);
                                                 const isMarkdownHeader = /^(#{2,4})\s+/.test(line);
                                                 const isLikelyTableRow = /\|/.test(line) && line.split("|").filter(Boolean).length >= 2;
                                                 const isOnlyPipes = /^\|+\s*\|*$/.test(line);
@@ -353,7 +363,7 @@ const ChatWindow = () => {
 
                                                 if (buffer.length > 0) {
                                                     elements.push(<div key={`table-${lineIdx}`}>{renderBufferedTable()}</div>);
-                                                    buffer = [];
+                                                    buffer.length = 0;
                                                 }
 
                                                 if (isHeader) {
@@ -407,6 +417,7 @@ const ChatWindow = () => {
                                                 </div>
                                             );
                                         })}
+
                                     </div>
                                 </div>
                             );
