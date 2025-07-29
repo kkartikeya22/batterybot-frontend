@@ -4,7 +4,7 @@ import axios from "axios";
 
 export const fetchSheetData = async (sheetUrl) => {
   try {
-    const response = await axios.post("http://localhost:5000/api/sheet/read-sheet", {
+    const response = await axios.post("https://batterybot.onrender.com/api/sheet/read-sheet", {
       sheetUrl,
     });
 

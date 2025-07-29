@@ -9,7 +9,7 @@ const SheetReader = () => {
   const handleFetch = async () => {
     try {
       setError("");
-      const res = await axios.post("http://localhost:5000/api/sheet/read-sheet", {
+      const res = await axios.post("https://batterybot.onrender.com/api/sheet/read-sheet", {
         sheetUrl: url,
       });
       setSheetData(res.data.data);
