@@ -8,6 +8,7 @@ const Register = () => {
   const [password, setPassword] = useState("");
   const [focusedInput, setFocusedInput] = useState(null);
   const [error, setError] = useState(null);
+  const [loading, setLoading] = useState(false); // ✅ NEW
 
   const { register } = useContext(AuthContext);
   const navigate = useNavigate();
@@ -15,11 +16,14 @@ const Register = () => {
   const handleSubmit = async (e) => {
     e.preventDefault();
     setError(null);
+    setLoading(true); // ✅ start loading
+
     const success = await register(name, email, password);
     if (success === true) {
       navigate("/login");
     } else {
       setError(success || "Registration failed. Please try again.");
+      setLoading(false); // ✅ stop loading only on error
     }
   };
 
@@ -32,7 +36,8 @@ const Register = () => {
         onFocus={() => setFocusedInput(name)}
         onBlur={() => setFocusedInput(null)}
         required
-        className="peer w-full px-4 pt-5 pb-2 text-gray-800 bg-white border-2 border-gray-300 rounded-xl placeholder-transparent focus:outline-none focus:border-[#FFB800] focus:ring-2 focus:ring-[#FFB800]/30 transition font-nunito"
+        disabled={loading} // ✅ disable during loading
+        className="peer w-full px-4 pt-5 pb-2 text-gray-800 bg-white border-2 border-gray-300 rounded-xl placeholder-transparent focus:outline-none focus:border-[#FFB800] focus:ring-2 focus:ring-[#FFB800]/30 transition font-nunito disabled:opacity-50 disabled:cursor-not-allowed"
         placeholder={label}
       />
       <label
@@ -67,9 +72,14 @@ const Register = () => {
 
           <button
             type="submit"
-            className="w-full py-3 rounded-xl bg-[#00E0B8] text-white font-semibold hover:bg-[#00cbb0] transition-all duration-200 shadow-md font-nunito"
+            disabled={loading}
+            className={`w-full py-3 rounded-xl font-semibold transition-all duration-200 shadow-md font-nunito ${
+              loading
+                ? "bg-gray-300 text-gray-600 cursor-not-allowed"
+                : "bg-[#00E0B8] text-white hover:bg-[#00cbb0]"
+            }`}
           >
-            Create Account
+            {loading ? "⏳ Creating..." : "Create Account"}
           </button>
         </form>
 

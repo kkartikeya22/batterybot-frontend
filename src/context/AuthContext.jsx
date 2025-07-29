@@ -24,7 +24,7 @@ export const AuthProvider = ({ children }) => {
   const login = async (email, password) => {
     setLoading(true);
     try {
-      const res = await axios.post("https://batterybot.onrender.com/api/auth/login", {
+      const res = await axios.post("http://localhost:5000/api/auth/login", {
         email,
         password,
       });
@@ -50,7 +50,7 @@ export const AuthProvider = ({ children }) => {
   const register = async (username, email, password) => {
     setLoading(true);
     try {
-      const res = await axios.post("https://batterybot.onrender.com/api/auth/register", {
+      const res = await axios.post("http://localhost:5000/api/auth/register", {
         username,
         email,
         password,
@@ -86,7 +86,7 @@ export const AuthProvider = ({ children }) => {
     setAuthToken(token);
 
     try {
-      const res = await axios.get("https://batterybot.onrender.com/api/auth/profile");
+      const res = await axios.get("http://localhost:5000/api/auth/profile");
 
       if (res.data && res.data._id) {
         setUser(res.data);

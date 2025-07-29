@@ -8,6 +8,7 @@ const Login = () => {
   const [focusedInput, setFocusedInput] = useState(null);
   const [error, setError] = useState("");
   const [animatedText, setAnimatedText] = useState("");
+  const [loading, setLoading] = useState(false); // ✅ NEW
 
   const { login } = useContext(AuthContext);
   const navigate = useNavigate();
@@ -26,12 +27,18 @@ const Login = () => {
   const handleSubmit = async (e) => {
     e.preventDefault();
     setError("");
+    setLoading(true); // ✅ Start loading
     try {
       const success = await login(email, password);
-      if (success) navigate("/");
-      else setError("Invalid credentials. Please try again.");
+      if (success) {
+        navigate("/");
+      } else {
+        setError("Invalid credentials. Please try again.");
+        setLoading(false);
+      }
     } catch {
       setError("Something went wrong. Please try again.");
+      setLoading(false);
     }
   };
 
@@ -44,7 +51,8 @@ const Login = () => {
         onFocus={() => setFocusedInput(name)}
         onBlur={() => setFocusedInput(null)}
         required
-        className="peer w-full px-4 pt-5 pb-2 text-gray-800 bg-white border-2 border-gray-300 rounded-xl placeholder-transparent focus:outline-none focus:border-[#FFB800] focus:ring-2 focus:ring-[#FFB800]/30 transition font-nunito"
+        disabled={loading} // ✅ Prevent input during loading
+        className="peer w-full px-4 pt-5 pb-2 text-gray-800 bg-white border-2 border-gray-300 rounded-xl placeholder-transparent focus:outline-none focus:border-[#FFB800] focus:ring-2 focus:ring-[#FFB800]/30 transition font-nunito disabled:opacity-50 disabled:cursor-not-allowed"
         placeholder={label}
       />
       <label
@@ -78,9 +86,14 @@ const Login = () => {
 
           <button
             type="submit"
-            className="w-full py-3 rounded-xl bg-[#00E0B8] text-white font-semibold hover:bg-[#00cbb0] transition-all duration-200 shadow-md font-nunito"
+            disabled={loading}
+            className={`w-full py-3 rounded-xl font-semibold transition-all duration-200 shadow-md font-nunito ${
+              loading
+                ? "bg-gray-300 text-gray-600 cursor-not-allowed"
+                : "bg-[#00E0B8] text-white hover:bg-[#00cbb0]"
+            }`}
           >
-            🚀 Launch In
+            {loading ? "🔄 Logging in..." : "🚀 Launch In"}
           </button>
         </form>
 
