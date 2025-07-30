@@ -49,6 +49,7 @@ export const ChatProvider = ({ children }) => {
     }
   };
 
+
   const handleSetActiveChat = (chat) => {
     setActiveChat(chat);
     if (chat?._id) {

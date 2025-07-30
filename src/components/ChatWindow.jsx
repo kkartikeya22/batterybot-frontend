@@ -3,44 +3,52 @@ import { ChatContext } from "../context/ChatContext";
 import SheetPopup from "./SheetPopup";
 import axios from "axios";
 import "../index.css";
+import { ChevronDown, ChevronUp } from "lucide-react";
 
-const Typewriter = ({ text, className }) => {
-  const [displayed, setDisplayed] = useState("");
-  const [index, setIndex] = useState(0);
 
-  useEffect(() => {
-    if (index < text.length) {
-      const timeout = setTimeout(() => {
-        setDisplayed(text.slice(0, index + 1));
-        setIndex(i => i + 1);
-      }, 15); // typing speed
+const Typewriter = ({ text = "", className = "" }) => {
+    const [visibleText, setVisibleText] = useState("");
+    const [charIndex, setCharIndex] = useState(0);
 
-      return () => clearTimeout(timeout);
-    }
-  }, [index, text]);
+    useEffect(() => {
+        if (!text || charIndex >= text.length) return;
 
-  const parseMarkdown = (rawText) =>
-    rawText
-      .split(/(\*\*[^*]+\*\*|_[^_]+_)/g)
-      .filter(Boolean)
-      .map((chunk, idx) => {
-        if (/^\*\*[^*]+\*\*$/.test(chunk)) {
-          return (
-            <strong key={idx} className="font-semibold text-[#0e4b7f]">
-              {chunk.slice(2, -2)}
-            </strong>
-          );
-        } else if (/^_[^_]+_$/.test(chunk)) {
-          return (
-            <em key={idx} className="italic">
-              {chunk.slice(1, -1)}
-            </em>
-          );
-        }
-        return chunk;
-      });
+        const timeout = setTimeout(() => {
+            setVisibleText(text.slice(0, charIndex + 1));
+            setCharIndex(prev => prev + 1);
+        }, 15); // Typing speed in ms
 
-  return <p className={className}>{parseMarkdown(displayed)}</p>;
+        return () => clearTimeout(timeout);
+    }, [charIndex, text]);
+
+    const parseMarkdown = (input) => {
+        return input
+            .split(/(\*\*[^*]+\*\*|_[^_]+_)/g)
+            .filter(Boolean)
+            .map((chunk, i) => {
+                if (/^\*\*[^*]+\*\*$/.test(chunk)) {
+                    return (
+                        <strong key={i} className="font-semibold text-blue-800">
+                            {chunk.slice(2, -2)}
+                        </strong>
+                    );
+                }
+                if (/^_[^_]+_$/.test(chunk)) {
+                    return (
+                        <em key={i} className="italic text-gray-700">
+                            {chunk.slice(1, -1)}
+                        </em>
+                    );
+                }
+                return <span key={i}>{chunk}</span>;
+            });
+    };
+
+    return (
+        <p className={`whitespace-pre-wrap leading-relaxed ${className}`}>
+            {parseMarkdown(visibleText)}
+        </p>
+    );
 };
 
 const ChatWindow = () => {
@@ -51,6 +59,8 @@ const ChatWindow = () => {
     const [isSending, setIsSending] = useState(false);
     const [isFetchingChat, setIsFetchingChat] = useState(false);
     const [selectedSheetKey, setSelectedSheetKey] = useState(""); // NEW
+    const [showThought, setShowThought] = useState({});
+
     const bottomRef = useRef(null);
 
     useEffect(() => {
@@ -64,11 +74,12 @@ const ChatWindow = () => {
                     `${import.meta.env.VITE_BACKEND_URL}/api/chat/${activeChat._id}`,
                     { headers: { Authorization: `Bearer ${token}` } }
                 );
+
                 const chat = res.data;
+
                 setMessages(chat.messages || []);
                 setActiveChat(chat);
 
-                // Auto-select first sheet key
                 const firstKey = Object.keys(chat?.sheetData?.data || {})[0];
                 setSelectedSheetKey(firstKey);
             } catch (err) {
@@ -79,11 +90,8 @@ const ChatWindow = () => {
         };
 
         fetchFullChat();
-    }, [activeChat?._id]);
+    }, [activeChat?._id]); // 🔁 Trigger on full activeChat object to re-fetch every time
 
-    useEffect(() => {
-        bottomRef.current?.scrollIntoView({ behavior: "smooth" });
-    }, [messages]);
 
     const handleRefetchSheet = async () => {
         if (!activeChat?._id) return;
@@ -117,6 +125,7 @@ const ChatWindow = () => {
 
         const userText = inputText;
         const selectedData = activeChat?.sheetData?.data?.[selectedSheetKey];
+
 
         setInputText("");
         setIsSending(true);
@@ -155,18 +164,33 @@ const ChatWindow = () => {
                 }
             );
 
+
             const assistantMessages = res.data.filter(
                 (msg) => msg.sender === "assistant"
             );
 
-            setMessages((prev) => [...prev.slice(0, -1), ...assistantMessages]);
+
+            const processedMessages = assistantMessages.map((msg) => {
+                return {
+                    _id: msg._id,
+                    sender: msg.sender,
+                    type: msg.type,
+                    text: msg.text || msg.answer || "", // fallback
+                    thought: msg.thought || null,
+                    answer: msg.answer || null,
+                };
+            });
+
+
+            setMessages((prev) => [...prev.slice(0, -1), ...processedMessages]);
+
         } catch (err) {
             console.error("[handleSendMessage] Error:", err);
             setMessages((prev) => [
                 ...prev.slice(0, -1),
                 {
                     _id: "error-bot",
-                    text: "Error getting response",
+                    text: "⚠️ Error generating response from Battery Bot.",
                     type: "bot",
                     sender: "assistant",
                 },
@@ -175,6 +199,9 @@ const ChatWindow = () => {
             setIsSending(false);
         }
     };
+
+
+
 
     if (!activeChat) {
         return <div className="flex-1 bg-[#0f111a] flex items-center justify-center rounded-2xl"><p className="text-slate-500 italic text-base">Select a chat to begin</p></div>;
@@ -296,11 +323,12 @@ const ChatWindow = () => {
 
 
                         if (msg.sender === "assistant") {
-                            const sections = msg.text.split(/-{3,}/g).map(s => s.trim()).filter(Boolean);
+                            const answer = msg.answer || msg.text || "";
+                            const thought = msg.thought || "";
+                            const sections = answer.split(/-{3,}/g).map(s => s.trim()).filter(Boolean);
 
                             return (
                                 <div key={i} className="self-start flex items-start gap-3 max-w-[90%]">
-
                                     {/* Avatar */}
                                     <div className="w-9 h-9 flex-shrink-0 flex items-center justify-center rounded-full bg-white border border-[#86d6ff] shadow-md">
                                         <img
@@ -310,145 +338,305 @@ const ChatWindow = () => {
                                         />
                                     </div>
 
-                                    {/* Message */}
-                                    <div className="px-5 py-4 bg-[#f4fbff] text-gray-800 rounded-2xl rounded-bl-md border border-[#c2e9ff] shadow-md text-[15px] leading-relaxed tracking-wide flex flex-col gap-5 w-full font-[500]">
+                                    <div className="flex flex-col gap-2 w-full">
+                                        {/* 💭 Thought Block */}
+                                        {thought && (
+                                            <div className="bg-gradient-to-br from-[#f8fafd] to-[#eef4ff] border border-[#c7dcf7] rounded-xl shadow-md transition-all">
+                                                <div
+                                                    onClick={() => setShowThought((prev) => ({ ...prev, [i]: !prev[i] }))}
+                                                    className="w-full px-4 py-2 flex justify-between items-center cursor-pointer bg-[#e9f2ff] hover:bg-[#dfe9fa] rounded-t-xl border-b border-[#d4e4f7] text-[#1e3a5f] font-medium tracking-wide text-[15px] select-none"
+                                                >
+                                                    <div className="flex items-center gap-2">
+                                                        <span className="text-lg">💭</span>
+                                                        <span className="text-[15px]">AI's Thought (tap to {showThought?.[i] ? "hide" : "view"})</span>
+                                                    </div>
+                                                    <span className="text-[18px] text-[#4b6a88]">
+                                                        {showThought?.[i] ? <ChevronUp size={18} strokeWidth={2} /> : <ChevronDown size={18} strokeWidth={2} />}
+                                                    </span>
 
-                                        {sections.map((sectionText, sectionIdx) => {
-                                            const lines = sectionText.split("\n").map(l => l.trimEnd());
-                                            let buffer = [];
-                                            const elements = [];
+                                                </div>
 
-                                            const parseMarkdown = (text) =>
-                                                text
-                                                    .split(/(\*\*[^*]+\*\*|_[^_]+_)/g)
-                                                    .filter(Boolean)
-                                                    .map((chunk, idx) => {
-                                                        if (/^\*\*[^*]+\*\*$/.test(chunk)) {
-                                                            return <strong key={idx} className="font-semibold text-[#0e4b7f]">{chunk.slice(2, -2)}</strong>;
-                                                        } else if (/^_[^_]+_$/.test(chunk)) {
-                                                            return <em key={idx} className="italic">{chunk.slice(1, -1)}</em>;
-                                                        }
-                                                        return chunk;
-                                                    });
+                                                {/* Formatted Thought */}
+                                                {showThought?.[i] && (
+                                                    <div className="px-4 pb-4 pt-1 text-sm text-gray-700 leading-relaxed space-y-2">
+                                                        {(() => {
+                                                            const lines = thought.split("\n").map(l => l.trimEnd());
+                                                            let buffer = [];
+                                                            const elements = [];
 
-                                            const renderBufferedTable = () => {
-                                                const parsedRows = buffer
-                                                    .map(row =>
-                                                        row
-                                                            .split("|")
-                                                            .map(cell => cell.trim())
-                                                            .filter(cell => cell.length > 0)
-                                                    )
-                                                    .filter(row => row.length > 1);
+                                                            const parseMarkdown = (text) =>
+                                                                text
+                                                                    .split(/(\*\*[^*]+\*\*|_[^_]+_)/g)
+                                                                    .filter(Boolean)
+                                                                    .map((chunk, idx) => {
+                                                                        if (/^\*\*[^*]+\*\*$/.test(chunk)) {
+                                                                            return <strong key={idx} className="font-semibold text-[#0e4b7f]">{chunk.slice(2, -2)}</strong>;
+                                                                        } else if (/^_[^_]+_$/.test(chunk)) {
+                                                                            return <em key={idx} className="italic">{chunk.slice(1, -1)}</em>;
+                                                                        }
+                                                                        return chunk;
+                                                                    });
 
-                                                if (parsedRows.length === 0) return null;
+                                                            const renderBufferedTable = () => {
+                                                                const parsedRows = buffer
+                                                                    .map(row =>
+                                                                        row
+                                                                            .split("|")
+                                                                            .map(cell => cell.trim())
+                                                                            .filter(cell => cell.length > 0)
+                                                                    )
+                                                                    .filter(row => row.length > 1);
 
-                                                const maxCols = Math.max(...parsedRows.map(r => r.length));
-                                                return (
-                                                    <table className="w-full my-3 border border-[#addbff] rounded-md text-[14px] text-left overflow-hidden shadow-sm">
-                                                        <tbody>
-                                                            {parsedRows.map((row, rowIdx) => (
-                                                                <tr key={rowIdx} className="even:bg-[#ebf8ff]">
-                                                                    {Array.from({ length: maxCols }).map((_, colIdx) => (
-                                                                        <td key={colIdx} className="border border-[#d6ebfa] px-3 py-2 bg-white">
-                                                                            {parseMarkdown(row[colIdx] || "")}
-                                                                        </td>
-                                                                    ))}
-                                                                </tr>
-                                                            ))}
-                                                        </tbody>
-                                                    </table>
-                                                );
-                                            };
+                                                                if (parsedRows.length === 0) return null;
 
-                                            const getDynamicColorClass = (text) => {
-                                                const t = text.toLowerCase();
+                                                                const maxCols = Math.max(...parsedRows.map(r => r.length));
+                                                                return (
+                                                                    <table className="w-full my-3 border border-[#addbff] rounded-md text-[14px] text-left overflow-hidden shadow-sm">
+                                                                        <tbody>
+                                                                            {parsedRows.map((row, rowIdx) => (
+                                                                                <tr key={rowIdx} className="even:bg-[#ebf8ff]">
+                                                                                    {Array.from({ length: maxCols }).map((_, colIdx) => (
+                                                                                        <td key={colIdx} className="border border-[#d6ebfa] px-3 py-2 bg-white">
+                                                                                            {parseMarkdown(row[colIdx] || "")}
+                                                                                        </td>
+                                                                                    ))}
+                                                                                </tr>
+                                                                            ))}
+                                                                        </tbody>
+                                                                    </table>
+                                                                );
+                                                            };
 
-                                                if (/summary|overview/.test(t)) return "text-[#0e4b7f]";
-                                                if (/observation|trend/.test(t)) return "text-[#007bff]";
-                                                if (/issue|problem|error/.test(t)) return "text-[#e53935]";
-                                                if (/cause|reason|factor/.test(t)) return "text-[#ff9800]";
-                                                if (/impact|effect/.test(t)) return "text-[#9c27b0]";
-                                                if (/recommendation|action/.test(t)) return "text-[#2e7d32]";
-                                                if (/analysis|insight/.test(t)) return "text-[#6a1b9a]";
-                                                if (/conclusion|final/.test(t)) return "text-[#d81b60]";
-                                                if (/note|important|alert/.test(t)) return "text-[#f9a825]";
+                                                            const getDynamicColorClass = (text) => {
+                                                                const t = text.toLowerCase();
 
-                                                return "text-[#37474f]"; // fallback gray-blue
-                                            };
+                                                                if (/summary|overview|synopsis|gist/.test(t)) return "text-[#6c63ff]"; // Calm Indigo (neutral summary)
+                                                                if (/observation|trend|pattern|noted|seen/.test(t)) return "text-[#00bfa6]"; // Teal (cool analytical tone)
+                                                                if (/issue|problem|error|bug|fault|concern/.test(t)) return "text-[#ff6b6b]"; // Soft Red (problem vibe)
+                                                                if (/cause|reason|factor|root|source|origin/.test(t)) return "text-[#ffb347]"; // Warm Amber (explanatory)
+                                                                if (/impact|effect|result|outcome|consequence/.test(t)) return "text-[#ab47bc]"; // Soft Purple (analytical)
+                                                                if (/recommendation|action|suggestion|proposal|advice|next step/.test(t)) return "text-[#4caf50]"; // Green (positive/action)
+                                                                if (/analysis|insight|breakdown|exploration|review/.test(t)) return "text-[#42a5f5]"; // Blue (neutral intellect)
+                                                                if (/conclusion|final|closing|wrap-up|end/.test(t)) return "text-[#5c6bc0]"; // Calm Slate Blue
+                                                                if (/note|important|alert|warning|attention/.test(t)) return "text-[#ffa726]"; // Soft Orange (alert tone)
+                                                                if (/question|query|doubt/.test(t)) return "text-[#26c6da]"; // Light Blue (inquisitive tone)
+                                                                if (/data|statistic|number|metric/.test(t)) return "text-[#789262]"; // Soft Olive (data heavy)
+                                                                if (/goal|objective|target|aim/.test(t)) return "text-[#66bb6a]"; // Healthy Green (aim)
+
+                                                                // ⬆️ Positive Changes → Soft Green
+                                                                if (/increase|rise|growth|gain|improve|improvement/.test(t)) return "text-[#81c784]"; // Soft Green
+
+                                                                // ⬇️ Negative Changes → Soft Red
+                                                                if (/decrease|drop|decline|fall|loss|reduction/.test(t)) return "text-[#e57373]"; // Soft Red
+
+                                                                // ⬄ Neutral Changes or Variability → Muted Purple
+                                                                if (/fluctuation|change|variance|variation/.test(t)) return "text-[#ba68c8]"; // Soft Muted Purple
+
+                                                                return "text-[#757575]"; // Default: Muted Gray
+                                                            };
 
 
-                                            lines.forEach((line, lineIdx) => {
-                                                const isBullet = /^[-*]\s+/.test(line);
-                                                const isHeader = /^[A-Z].+[:：]$/.test(line); // General header format
-                                                const isMarkdownHeader = /^(#{2,4})\s+/.test(line);
-                                                const isLikelyTableRow = /\|/.test(line) && line.split("|").filter(Boolean).length >= 2;
-                                                const isOnlyPipes = /^\|+\s*\|*$/.test(line);
 
-                                                if (isLikelyTableRow && !isOnlyPipes) {
-                                                    buffer.push(line);
-                                                    return;
-                                                }
+
+                                                            lines.forEach((line, idx) => {
+                                                                const isBullet = /^[-*]\s+/.test(line);
+                                                                const isHeader = /^[A-Z].+[:：]$/.test(line);
+                                                                const isMarkdownHeader = /^(#{2,4})\s+/.test(line);
+                                                                const isLikelyTableRow = /\|/.test(line) && line.split("|").filter(Boolean).length >= 2;
+                                                                const isOnlyPipes = /^\|+\s*\|*$/.test(line);
+
+                                                                if (isLikelyTableRow && !isOnlyPipes) {
+                                                                    buffer.push(line);
+                                                                    return;
+                                                                }
+
+                                                                if (buffer.length > 0) {
+                                                                    elements.push(<div key={`table-${idx}`}>{renderBufferedTable()}</div>);
+                                                                    buffer = [];
+                                                                }
+
+                                                                if (isHeader) {
+                                                                    elements.push(
+                                                                        <h4 key={idx} className={`${getDynamicColorClass(line)} font-semibold text-[15px]`}>
+                                                                            {line}
+                                                                        </h4>
+                                                                    );
+                                                                } else if (isMarkdownHeader) {
+                                                                    const level = line.match(/^#{2,4}/)[0].length;
+                                                                    const content = line.replace(/^#{2,4}/, "").trim();
+                                                                    elements.push(
+                                                                        React.createElement(
+                                                                            `h${level}`,
+                                                                            {
+                                                                                key: idx,
+                                                                                className: "text-[#0e4b7f] font-bold mt-3 mb-1 text-[15px]",
+                                                                            },
+                                                                            parseMarkdown(content)
+                                                                        )
+                                                                    );
+                                                                } else if (isBullet) {
+                                                                    elements.push(
+                                                                        <li key={idx} className="ml-6 list-disc text-gray-700 text-[15px] leading-[1.75rem]">
+                                                                            {parseMarkdown(line.replace(/^[-*]\s*/, ""))}
+                                                                        </li>
+                                                                    );
+                                                                } else if (line.length > 0) {
+                                                                    elements.push(
+                                                                        <Typewriter
+                                                                            key={idx}
+                                                                            text={line}
+                                                                            className="text-[15px] text-gray-700 leading-[1.75rem] text-justify"
+                                                                        />
+                                                                    );
+                                                                }
+                                                            });
+
+                                                            if (buffer.length > 0) {
+                                                                elements.push(<div key="table-end">{renderBufferedTable()}</div>);
+                                                            }
+
+                                                            return <div className="space-y-2">{elements}</div>;
+                                                        })()}
+                                                    </div>
+                                                )}
+                                            </div>
+                                        )}
+                                        {/* ✅ Final Answer Block */}
+                                        <div className="px-5 py-4 bg-[#f4fbff] text-gray-800 rounded-2xl rounded-bl-md border border-[#c2e9ff] shadow-md text-[15px] leading-relaxed tracking-wide flex flex-col gap-5 font-[500]">
+                                            {sections.map((sectionText, sectionIdx) => {
+                                                const lines = sectionText.split("\n").map(l => l.trimEnd());
+                                                let buffer = [];
+                                                const elements = [];
+
+                                                const parseMarkdown = (text) =>
+                                                    text
+                                                        .split(/(\*\*[^*]+\*\*|_[^_]+_)/g)
+                                                        .filter(Boolean)
+                                                        .map((chunk, idx) => {
+                                                            if (/^\*\*[^*]+\*\*$/.test(chunk)) {
+                                                                return <strong key={idx} className="font-semibold text-[#0e4b7f]">{chunk.slice(2, -2)}</strong>;
+                                                            } else if (/^_[^_]+_$/.test(chunk)) {
+                                                                return <em key={idx} className="italic">{chunk.slice(1, -1)}</em>;
+                                                            }
+                                                            return chunk;
+                                                        });
+
+                                                const renderBufferedTable = () => {
+                                                    const parsedRows = buffer
+                                                        .map(row =>
+                                                            row
+                                                                .split("|")
+                                                                .map(cell => cell.trim())
+                                                                .filter(cell => cell.length > 0)
+                                                        )
+                                                        .filter(row => row.length > 1);
+
+                                                    if (parsedRows.length === 0) return null;
+
+                                                    const maxCols = Math.max(...parsedRows.map(r => r.length));
+                                                    return (
+                                                        <table className="w-full my-3 border border-[#addbff] rounded-md text-[14px] text-left overflow-hidden shadow-sm">
+                                                            <tbody>
+                                                                {parsedRows.map((row, rowIdx) => (
+                                                                    <tr key={rowIdx} className="even:bg-[#ebf8ff]">
+                                                                        {Array.from({ length: maxCols }).map((_, colIdx) => (
+                                                                            <td key={colIdx} className="border border-[#d6ebfa] px-3 py-2 bg-white">
+                                                                                {parseMarkdown(row[colIdx] || "")}
+                                                                            </td>
+                                                                        ))}
+                                                                    </tr>
+                                                                ))}
+                                                            </tbody>
+                                                        </table>
+                                                    );
+                                                };
+
+                                                const getDynamicColorClass = (text) => {
+                                                    const t = text.toLowerCase();
+                                                    if (/summary|overview/.test(t)) return "text-[#0e4b7f]";
+                                                    if (/observation|trend/.test(t)) return "text-[#007bff]";
+                                                    if (/issue|problem|error/.test(t)) return "text-[#e53935]";
+                                                    if (/cause|reason|factor/.test(t)) return "text-[#ff9800]";
+                                                    if (/impact|effect/.test(t)) return "text-[#9c27b0]";
+                                                    if (/recommendation|action/.test(t)) return "text-[#2e7d32]";
+                                                    if (/analysis|insight/.test(t)) return "text-[#6a1b9a]";
+                                                    if (/conclusion|final/.test(t)) return "text-[#d81b60]";
+                                                    if (/note|important|alert/.test(t)) return "text-[#f9a825]";
+                                                    return "text-[#37474f]";
+                                                };
+
+                                                lines.forEach((line, lineIdx) => {
+                                                    const isBullet = /^[-*]\s+/.test(line);
+                                                    const isHeader = /^[A-Z].+[:：]$/.test(line);
+                                                    const isMarkdownHeader = /^(#{2,4})\s+/.test(line);
+                                                    const isLikelyTableRow = /\|/.test(line) && line.split("|").filter(Boolean).length >= 2;
+                                                    const isOnlyPipes = /^\|+\s*\|*$/.test(line);
+
+                                                    if (isLikelyTableRow && !isOnlyPipes) {
+                                                        buffer.push(line);
+                                                        return;
+                                                    }
+
+                                                    if (buffer.length > 0) {
+                                                        elements.push(<div key={`table-${lineIdx}`}>{renderBufferedTable()}</div>);
+                                                        buffer = [];
+                                                    }
+
+                                                    if (isHeader) {
+                                                        const colorClass = getDynamicColorClass(line);
+                                                        elements.push(
+                                                            <h4 key={lineIdx} className={`${colorClass} font-semibold text-[16px] mb-1`}>
+                                                                {line}
+                                                            </h4>
+                                                        );
+                                                    } else if (isMarkdownHeader) {
+                                                        const level = line.match(/^#{2,4}/)[0].length;
+                                                        const content = line.replace(/^#{2,4}/, "").trim();
+                                                        elements.push(
+                                                            React.createElement(
+                                                                `h${level}`,
+                                                                {
+                                                                    key: lineIdx,
+                                                                    className: "text-[#0e4b7f] font-bold mt-3 mb-1 text-[16px]",
+                                                                },
+                                                                parseMarkdown(content)
+                                                            )
+                                                        );
+                                                    } else if (isBullet) {
+                                                        elements.push(
+                                                            <li key={lineIdx} className="ml-6 list-disc text-gray-700 text-[15px] leading-[1.75rem]">
+                                                                {parseMarkdown(line.replace(/^[-*]\s*/, ""))}
+                                                            </li>
+                                                        );
+                                                    } else if (line.length > 0) {
+                                                        elements.push(
+                                                            <Typewriter
+                                                                key={lineIdx}
+                                                                text={line}
+                                                                className="text-[15px] text-gray-700 leading-[1.75rem] text-justify"
+                                                            />
+                                                        );
+                                                    }
+                                                });
 
                                                 if (buffer.length > 0) {
-                                                    elements.push(<div key={`table-${lineIdx}`}>{renderBufferedTable()}</div>);
-                                                    buffer = [];
+                                                    elements.push(<div key="table-end">{renderBufferedTable()}</div>);
                                                 }
 
-                                                if (isHeader) {
-                                                    const colorClass = getDynamicColorClass(line);
-                                                    elements.push(
-                                                        <h4 key={lineIdx} className={`${colorClass} font-semibold text-[16px] mb-1`}>
-                                                            {line}
-                                                        </h4>
-                                                    );
-                                                } else if (isMarkdownHeader) {
-                                                    const level = line.match(/^#{2,4}/)[0].length;
-                                                    const content = line.replace(/^#{2,4}/, "").trim();
-                                                    elements.push(
-                                                        React.createElement(
-                                                            `h${level}`,
-                                                            {
-                                                                key: lineIdx,
-                                                                className: "text-[#0e4b7f] font-bold mt-3 mb-1 text-[16px]",
-                                                            },
-                                                            parseMarkdown(content)
-                                                        )
-                                                    );
-                                                } else if (isBullet) {
-                                                    elements.push(
-                                                        <li
-                                                            key={lineIdx}
-                                                            className="ml-6 list-disc text-gray-700 text-[15px] leading-[1.75rem]"
-                                                        >
-                                                            {parseMarkdown(line.replace(/^[-*]\s*/, ""))}
-                                                        </li>
-                                                    );
-                                                } else if (line.length > 0) {
-                                                    elements.push(
-                                                        <Typewriter
-                                                            key={lineIdx}
-                                                            text={line}
-                                                            className="text-[15px] text-gray-700 leading-[1.75rem] text-justify"
-                                                        />
-                                                    );
-                                                }
-                                            });
-
-                                            if (buffer.length > 0) {
-                                                elements.push(<div key="table-end">{renderBufferedTable()}</div>);
-                                            }
-
-                                            return (
-                                                <div key={sectionIdx} className="mb-1">
-                                                    {elements}
-                                                </div>
-                                            );
-                                        })}
+                                                return (
+                                                    <div key={sectionIdx} className="mb-1">
+                                                        {elements}
+                                                    </div>
+                                                );
+                                            })}
+                                        </div>
                                     </div>
                                 </div>
                             );
                         }
+
+
+
 
 
 
@@ -533,12 +721,7 @@ const ChatWindow = () => {
 
         </div >
     );
-
-
-
-
 };
-
 export default ChatWindow;
 
 
